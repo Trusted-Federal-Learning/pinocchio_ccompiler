@@ -1,6 +1,6 @@
 import types
 from Storage import *
-from Struct import *
+from _Struct import *
 from BitWidth import *
 from DFGOperator import *
 

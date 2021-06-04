@@ -19,16 +19,12 @@ class ArithConvert(Collapser):
 			help='the input I/O file')
 
 		args = parser.parse_args()
-		self.gen_head()
 		self.parse(args.circuitfile)
-		self.gen_var_decl()
-		self.gen_pb_alloc()
 		self.gen_constraints()
 		self.load_inputs(args.infile)
 		self.evaluate()
 		self.fill_gaps()
 		self.gen_write_wires()
-		self.gen_tail()
 
 
 	def sub_parse(self, verb, in_a, out_a):
@@ -114,9 +110,7 @@ class ArithConvert(Collapser):
 				raise Exception("%s not in gates" % wire_id)
 
 	def evaluate(self):
-		output_ids = list(self.outputs)
-		output_ids.sort()
-		for wire_id in output_ids:
+		for wire_id in self.output_ids:
 			self.collapse_tree(wire_id)
 
 	def load_inputs(self, in_fn):
@@ -176,87 +170,22 @@ class ArithConvert(Collapser):
 	def collapse_impl(self, wire):
 		return self.gates[wire].eval(self)
 
-	def gen_head(self):
-		print ("""#include <libsnark/common/default_types/r1cs_gg_ppzksnark_pp.hpp>
-#include <libsnark/zk_proof_systems/ppzksnark/r1cs_gg_ppzksnark/r1cs_gg_ppzksnark.hpp>
-#include <libsnark/gadgetlib1/pb_variable.hpp>
-using namespace libsnark;
-using namespace std;
-void hexdump(const void *mem, int siz, char *name)
-{
-    printf("%s %d ", name, siz);
-    for (int i = 0; i < siz; i++)
-    {
-        printf("%02x ", *((const unsigned char *)mem + i));
-    }
-    putchar('\\n');
-}
-r1cs_gg_ppzksnark_proof<default_r1cs_gg_ppzksnark_pp> read_proof()
-{
-    puts("enter read_proof");
-    int siz;
-    scanf("%*s %d", &siz);
-    void *p = malloc(siz);
-    for (int i = 0; i < siz; i++)
-    {
-        scanf("%hhx", &((char *)p)[i]);
-    }
-    puts("leave read_proof");
-    return *(r1cs_gg_ppzksnark_proof<default_r1cs_gg_ppzksnark_pp> *)p;
-}
-r1cs_gg_ppzksnark_verification_key<default_r1cs_gg_ppzksnark_pp> read_vk()
-{
-    puts("enter read_vk");
-    int siz;
-    scanf("%*s %d", &siz);
-    void *p = malloc(siz);
-    for (int i = 0; i < siz; i++)
-    {
-        scanf("%hhx", &((char *)p)[i]);
-    }
-    istringstream is((char *)p);
-    r1cs_gg_ppzksnark_verification_key<default_r1cs_gg_ppzksnark_pp> vk;
-    is >> vk;
-    puts("leave read_vk");
-    return vk;
-}
-int main()
-{
-    typedef libff::Fr<default_r1cs_gg_ppzksnark_pp> FieldT;
-
-    // Initialize the curve parameters
-    default_r1cs_gg_ppzksnark_pp::init_public_params();
-
-    // Create protoboard
-    protoboard<FieldT> pb;
-""")
-
-
-	def gen_var_decl(self):
-		for i in range(self.total_wires):
-			print("pb_variable<FieldT> var_%d;" % i)
-
-
-	def gen_pb_alloc(self):
-		self.outlist = sorted(self.outputs)
-		for i in self.outlist:
-			print("var_%d.allocate(pb, \"var_%d\");" % (i, i))
-		for i in range(self.total_wires-len(self.outlist)):
-			print("var_%d.allocate(pb, \"var_%d\");" % (i, i))
-		print("pb.set_input_sizes(%d);"%len(self.outlist))
-
-
 	def gen_constraints(self):
+		self.output_ids = list(self.outputs)
+		self.output_ids.sort()
+		f = open("arith_converted", "w")
+		f.write("input %d\n" % self.total_wires)
+		f.write("out_start %d\n" % self.output_ids[0])
 		for outid, gate in self.gates.items():
 			# EAConstMul, EAConstDiv, EASplit, EAZerop, EAAdd, EAMul, EADiv
 			if isinstance(gate, EAAdd):
-				print("pb.add_r1cs_constraint(r1cs_constraint<FieldT>(var_%d+var_%d, 1, var_%d));" % (gate.wire_list[0], gate.wire_list[1], outid))
+				f.write("add %d %d %d\n" % (gate.wire_list[0], gate.wire_list[1], outid))
 			elif isinstance(gate, EAMul): 
-				print("pb.add_r1cs_constraint(r1cs_constraint<FieldT>(var_%d, var_%d, var_%d));" % (gate.wire_list[0], gate.wire_list[1], outid))
+				f.write("mul %d %d %d\n" % (gate.wire_list[0], gate.wire_list[1], outid))
 			elif isinstance(gate, EADiv):
-				print("pb.add_r1cs_constraint(r1cs_constraint<FieldT>(var_%d, var_%d, var_%d));" % (outid, gate.wire_list[1], gate.wire_list[0]))
+				f.write("div %d %d %d\n" % (outid, gate.wire_list[1], gate.wire_list[0]))
 			elif isinstance(gate, EAConstMul):
-				print("pb.add_r1cs_constraint(r1cs_constraint<FieldT>(var_%d, %d, var_%d));" % (gate.wire_id, gate.const, outid))
+				f.write("constmul %d %d %d\n" % (gate.wire_id, gate.const, outid))
 			elif isinstance(gate, EAConstDiv):
 				pass
 				# print("pb.add_r1cs_constraint(r1cs_constraint<FieldT>(var_%d, %d, var_%d));" % (outid, gate.const, gate.wire_id))
@@ -264,12 +193,8 @@ int main()
 				pass
 			else:
 				assert(False)
-
-		print("""const r1cs_constraint_system<FieldT> constraint_system = pb.get_constraint_system();
-const r1cs_gg_ppzksnark_keypair<default_r1cs_gg_ppzksnark_pp> keypair = r1cs_gg_ppzksnark_generator<default_r1cs_gg_ppzksnark_pp>(constraint_system);
-""")
-
 	def gen_write_wires(self):
+		f = open("arith_wires", "w")
 		wire_ids = self.table.keys()	# Note peek into superclass' member. :v(
 		wire_ids.sort()
 		next_wire_id = 0
@@ -278,21 +203,9 @@ const r1cs_gg_ppzksnark_keypair<default_r1cs_gg_ppzksnark_pp> keypair = r1cs_gg_
 				for i in range(next_wire_id, wire_id):
 					assert(False)
 			val = int(self.lookup(wire_id))
-			# if val > 10000000 * 256:
-			# 	val = val / 10000000 * 10000000
-			print("pb.val(var_%d)=%s;" % (wire_id, hex(val).replace("L", "")))
+			f.write("%d %s\n" % (wire_id, hex(val).replace("L", "")))
 			next_wire_id = wire_id+1
 
-	def gen_tail(self):
-		print("""const r1cs_gg_ppzksnark_proof<default_r1cs_gg_ppzksnark_pp> proof = r1cs_gg_ppzksnark_prover<default_r1cs_gg_ppzksnark_pp>(keypair.pk, pb.primary_input(), pb.auxiliary_input());
-    ostringstream os;
-    os << keypair.vk;
-    string s = os.str();
-    hexdump(&proof, sizeof(proof), "proof");
-    hexdump(s.c_str(), s.size(), "keypair_vk");
-	return 0;
-}
-""")
 
 if __name__ == '__main__':
 	ArithConvert()

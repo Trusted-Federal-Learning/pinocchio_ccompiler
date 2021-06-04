@@ -34,8 +34,8 @@ class ReqFactory(Collapser):
 		self.emit(output_filename)
 
 		# Sanity checking and optimization statistics collection
-		self.report()
-		self.lint()
+		# self.report()
+		# self.lint()
 
 	def make_zero_bus(self): raise Exception("abstract")
 

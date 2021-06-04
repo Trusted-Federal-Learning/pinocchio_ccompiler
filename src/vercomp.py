@@ -24,7 +24,7 @@ import StringIO
 
 from Symtab import *
 from DFG import *
-from Struct import *
+from _Struct import *
 import BitWidth
 from Collapser import Collapser
 
@@ -151,7 +151,7 @@ class Vercomp:
 		# I used to call gcc-4; I'm not sure what machine had two versions
 		# or what the issue was, but I leave this comment here as a possible
 		# solution to the next sucker who runs into that problem.
-		cmd_list = ["gcc","-m32"]+cpp_args+["-E", filename, "-o", tmpname]
+		cmd_list = ["gcc"]+cpp_args+["-E", filename, "-o", tmpname]
 		print "cmd_list %s" % (" ".join(cmd_list))
 		sp = subprocess.Popen(cmd_list)
 		sp.wait()

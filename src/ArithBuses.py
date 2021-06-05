@@ -361,7 +361,7 @@ class SplitBus(Bus):
 	# Convert an ARITHMETIC_TYPE bus into a BOOLEAN_TYPE bus
 	def __init__(self, board, input_bus):
 		Bus.__init__(self, board, MAJOR_LOGIC)
-                print input_bus
+		# print input_bus
 		assert(input_bus.get_trace_type()==ARITHMETIC_TYPE)
 		self.input_bus = input_bus
 		self._trace_count = self.board.bit_width.truncate(

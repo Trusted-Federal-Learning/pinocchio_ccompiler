@@ -37,13 +37,17 @@ class ArithConvert(Collapser):
 		elif (verb=="div"):
 			self.add_gate(self.unique(out_a), EADiv(in_a))
 		elif (verb.startswith("const-mul-")):
-			if (verb[10:14]=="neg-"):
-				sign = -1
-				value = verb[14:]
-			else:
-				sign = 1
-				value = verb[10:]
-			const = int(value, 16) * sign
+			value = verb[10:]
+			const = int(value, 16)
+			if verb == 'const-mul-ffffffffffffffff':
+				const = -1
+			# if (verb[10:14]=="neg-"):
+			# 	sign = -1
+			# 	value = verb[14:]
+			# else:
+			# 	sign = 1
+			# 	value = verb[10:]
+			# const = int(value, 16) * sign
 			self.add_gate(self.unique(out_a), EAConstMul(const, self.unique(in_a)))
 		elif (verb=="zerop"):
 			self.add_gate(out_a[0], EAZerop(self.unique(in_a)))
@@ -176,6 +180,12 @@ class ArithConvert(Collapser):
 		f = open("arith_converted", "w")
 		f.write("input %d\n" % self.total_wires)
 		f.write("out_start %d\n" % self.output_ids[0])
+		constraint_count = 0
+		for outid, gate in self.gates.items():
+			# EAConstMul, EAConstDiv, EASplit, EAZerop, EAAdd, EAMul, EADiv
+			if isinstance(gate, EAAdd) or isinstance(gate, EAMul) or isinstance(gate, EADiv) or isinstance(gate, EAConstMul):
+				constraint_count += 1
+		f.write("constraint_count %d\n" % constraint_count)
 		for outid, gate in self.gates.items():
 			# EAConstMul, EAConstDiv, EASplit, EAZerop, EAAdd, EAMul, EADiv
 			if isinstance(gate, EAAdd):
